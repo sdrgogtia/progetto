@@ -1,0 +1,141 @@
+package com.uninabiogarden.oobd68.controller;
+
+import com.uninabiogarden.oobd68.boundary.ReportBoundary;
+import com.uninabiogarden.oobd68.entity.*;
+import com.uninabiogarden.oobd68.dao.*;
+import com.uninabiogarden.oobd68.entity.Messaggio;
+import com.uninabiogarden.oobd68.entity.Notifica;
+import com.uninabiogarden.oobd68.entity.Utente;
+import com.uninabiogarden.oobd68.entity.ReportDati;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Controller {
+    // Riferimenti ai DAO
+    private UtenteDAO utenteDAO;
+    private LottoDAO lottoDAO;
+    private ColturaDAO coltureDAO;
+    private AttivitaDAO attivitaDAO;
+    private NotificaDAO notificaDAO;
+    private ColtivazioneStagionaleDAO coltivazioneDAO;
+
+    // Variabili di stato per mantenere il contesto
+    private Attivita attivitaCorrente;
+    private Notifica notificaCorrente;
+
+    public Controller() {
+        // Passiamo "this" (il controller) ai DAO come richiesto dalla struttura
+        this.utenteDAO = new UtenteDAO(this);
+        this.lottoDAO = new LottoDAO(this);
+        this.coltureDAO = new ColturaDAO(this);
+        this.attivitaDAO = new AttivitaDAO(this);
+        this.notificaDAO = new NotificaDAO(this);
+        this.coltivazioneDAO = new ColtivazioneStagionaleDAO(this);
+    }
+
+    // 1. Metodo da com.uninabiogarden.oobd68.entity.Utente
+    public Utente PublicUtenteNome(String username, String password) {
+        return utenteDAO.login(username, password);
+    }
+
+    // 2. Metodo da com.uninabiogarden.oobd68.entity.Utente
+    public boolean CreaProgettoStagionale(Lotto lottoselezionato, List<Coltura> colturescelte) {
+        return utenteDAO.creaProgettoStagionale(lottoselezionato, colturescelte);
+    }
+
+    // 3. Metodo da com.uninabiogarden.oobd68.entity.Lotto
+    public boolean IsTerrenoAdatto(int idLotto, Coltura coltura) {
+        return lottoDAO.isTerrenoAdatto(idLotto, coltura);
+    }
+
+    // 4. Metodo da com.uninabiogarden.oobd68.entity.Coltura
+    public String getStagioneMigliore(int idColtura) {
+        return coltureDAO.getStagioneMigliore(idColtura);
+    }
+
+    // 5. Metodo da com.uninabiogarden.oobd68.entity.ColtivazioneStagionale
+    public void AggiungiAttività(Attivita nuovaAttivita) {
+        int idColtivazioneCorrente = 1;
+        coltivazioneDAO.aggiungiAttivita(idColtivazioneCorrente, nuovaAttivita);
+    }
+
+    // 6. Metodo da Attività
+    public void RegistraRaccolta(double QuantitaRaccolta) {
+        if (this.attivitaCorrente != null) {
+            attivitaDAO.registraRaccolta(this.attivitaCorrente.getidAttivita(), QuantitaRaccolta);
+        }
+    }
+
+    // 7. Metodo da Attività
+    public void ImpostaDettagliRaccolta(double QuantitaPrevista) {
+        if (this.attivitaCorrente != null) {
+            attivitaDAO.impostaDettagliRaccolta(this.attivitaCorrente.getidAttivita(), QuantitaPrevista);
+        }
+    }
+
+    // 8. Metodo da com.uninabiogarden.oobd68.entity.Notifica
+    public void InserisciNotifica() {
+        if (this.notificaCorrente != null) {
+            notificaDAO.inserisciNotifica(this.notificaCorrente);
+        }
+    }
+
+    // 9. Metodo da com.uninabiogarden.oobd68.entity.Notifica
+    public void ContrassegnaComeLetta() {
+        if (this.notificaCorrente != null) {
+            notificaDAO.contrassegnaComeLetta(this.notificaCorrente.getidNotifica());
+        }
+    }
+
+    // --- NUOVO METODO PER LE NOTIFICHE ---
+    public void InviaNotificaManuale(String testo, Messaggio tipo, int idLotto, int idColtivatoreTarget) {
+        if (idColtivatoreTarget == 0) {
+            List<Utente> collaboratori = new ArrayList<>();
+            System.out.println("Invio notifica a TUTTI i collaboratori del lotto " + idLotto);
+
+            for (Utente clt : collaboratori) {
+                Notifica n = new Notifica();
+                n.setContenuto(testo);
+                n.setTipoMessaggio(tipo);
+                n.setProblema("Segnalazione Broadcast");
+                notificaDAO.inserisciNotifica(n);
+            }
+
+            Notifica nGenerica = new Notifica();
+            nGenerica.setContenuto(testo + " (A TUTTI)");
+            nGenerica.setTipoMessaggio(tipo);
+            notificaDAO.inserisciNotifica(nGenerica);
+
+        } else {
+            Notifica n = new Notifica();
+            n.setContenuto(testo);
+            n.setTipoMessaggio(tipo);
+            n.setProblema("Messaggio Diretto a ID: " + idColtivatoreTarget);
+
+            notificaDAO.inserisciNotifica(n);
+            System.out.println("Notifica inviata al singolo coltivatore ID: " + idColtivatoreTarget);
+        }
+    }
+
+    // 10. Recupera Attività
+    public List<Attivita> RecuperaAttivitaPerProgetto(int idColtivazione) {
+        return attivitaDAO.recuperaAttivitaPerProgetto(idColtivazione);
+    } // <--- CHIUSURA DEL METODO CORRETTA QUI
+
+    // 12. Visualizza Report Statistico
+    public void visualizzaReport(int idLotto) { // <--- RIMOSSO IL PUNTO E VIRGOLA ER RATO
+        // 1. Recupera i dati
+        List<ReportDati> dati = attivitaDAO.generaReport(idLotto);
+
+        if (dati.isEmpty()) {
+            System.out.println("Nessun dato di raccolta disponibile per il lotto " + idLotto);
+        }
+
+        // 2. Apre la Boundary con il Grafico JFreeChart
+        new ReportBoundary(dati, idLotto).setVisible(true);
+    }
+
+    // Setter di utilità per il contesto
+    public void setAttivitaCorrente(Attivita a) { this.attivitaCorrente = a; }
+    public void setNotificaCorrente(Notifica n) { this.notificaCorrente = n; }
+}
